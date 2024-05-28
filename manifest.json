@@ -4,7 +4,6 @@
   "version": "1.0",
   "description": "A Chrome extension to fetch data from request responses for the Cave game.",
   "permissions": [
-    "activeTab",
     "scripting"
   ],
   "content_scripts": [{
@@ -18,5 +17,10 @@
   }],
   "background": {
     "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png"
   }
 }
