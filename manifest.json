@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Request Data Fetcher",
+  "version": "1.0",
+  "description": "Une extension pour récupérer les données des réponses aux requêtes.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "content_scripts": [{
+    "matches": ["*://cave.wolf.game/*"],
+    "run_at": "document_start",
+    "js": ["load_script.js"]
+  }],
+  "web_accessible_resources": [{
+    "resources": ["ws_interceptor.js"],
+    "matches": ["*://cave.wolf.game/*"]
+  }],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
