@@ -87,6 +87,7 @@
             const diggable = diggablePositions.some(diggablePos => diggablePos.position === position);
             const formattedData = {
                 collectionName: caveId,
+                caveId,
                 sheepId: id,
                 history,
                 position,
