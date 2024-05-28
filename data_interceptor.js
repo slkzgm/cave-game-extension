@@ -7,6 +7,7 @@
 
     let ws;
     let wsConnected = false;
+    let messageQueue = [];
 
     function initializeWebSocket() {
         ws = new WebSocket(`wss://${BACKEND_URL}`);
@@ -14,6 +15,10 @@
         ws.onopen = () => {
             wsConnected = true;
             console.log('WebSocket connection opened');
+            // Send any messages that were queued while the WebSocket was disconnected
+            while (messageQueue.length > 0) {
+                ws.send(messageQueue.shift());
+            }
         };
 
         ws.onclose = () => {
@@ -67,28 +72,6 @@
 
     function processResponse(xhr, postData) {
         // TODO: Add logic later if needed
-        // if (postData) {
-        //     if (typeof postData === 'string') {
-        //         try {
-        //             xhr._requestHeaders = JSON.parse(postData);
-        //         } catch (err) {
-        //             console.log('Request Header JSON decode failed, transfer_encoding field could be base64');
-        //             console.log(err);
-        //         }
-        //     }
-        // }
-        //
-        // if (xhr.responseType === '' || xhr.responseType === 'text') {
-        //     try {
-        //         const responseText = xhr.responseText;
-        //         console.log(JSON.parse(responseText));
-        //     } catch (err) {
-        //         console.log("Error in responseType try catch");
-        //         console.log(err);
-        //     }
-        // } else if (xhr.responseType === 'arraybuffer' || xhr.responseType === 'blob') {
-        //     console.log("Received arraybuffer or blob response type for URL:", xhr._url);
-        // }
     }
 
     function processMove(xhr) {
@@ -114,10 +97,16 @@
                 diggable
             };
 
+            const message = JSON.stringify(formattedData);
+
             if (wsConnected && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify(formattedData));
+                ws.send(message);
             } else {
-                console.error('WebSocket is not open. Ready state:', ws.readyState);
+                console.warn('WebSocket is not open. Ready state:', ws.readyState, 'Queuing message');
+                messageQueue.push(message);
+                if (!wsConnected) {
+                    initializeWebSocket();
+                }
             }
         } catch (err) {
             console.error('Failed to process move response:', err);

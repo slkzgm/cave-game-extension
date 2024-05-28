@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Request Data Fetcher",
+  "name": "Cave Game Request Data Fetcher",
   "version": "1.0",
-  "description": "Une extension pour récupérer les données des réponses aux requêtes.",
+  "description": "A Chrome extension to fetch data from request responses for the Cave game.",
   "permissions": [
     "activeTab",
     "scripting"
@@ -13,7 +13,7 @@
     "js": ["load_script.js"]
   }],
   "web_accessible_resources": [{
-    "resources": ["ws_interceptor.js"],
+    "resources": ["data_interceptor.js"],
     "matches": ["*://cave.wolf.game/*"]
   }],
   "background": {
