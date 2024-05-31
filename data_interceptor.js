@@ -5,44 +5,108 @@
     const open = XHR.open;
     const send = XHR.send;
 
-    let ws;
+    let ws = null;
     let wsConnected = false;
     let messageQueue = [];
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 10;
+    const reconnectDelay = 5000;
+    let reconnectTimeout;
 
-    function initializeWebSocket() {
-        ws = new WebSocket(`wss://${BACKEND_URL}`);
-
-        ws.onopen = () => {
-            wsConnected = true;
-            console.log('WebSocket connection opened');
-            // Send any messages that were queued while the WebSocket was disconnected
-            while (messageQueue.length > 0) {
-                ws.send(messageQueue.shift());
-            }
-        };
-
-        ws.onclose = () => {
-            wsConnected = false;
-            console.log('WebSocket connection closed. Reconnecting...');
-            reconnectWebSocket();
-        };
-
-        ws.onerror = (error) => {
-            console.error('WebSocket error: ', error);
-            wsConnected = false;
+    function connectWebSocket() {
+        if (ws !== null) {
+            ws.removeEventListener('open', handleSocketOpen);
+            ws.removeEventListener('message', handleSocketMessage);
+            ws.removeEventListener('close', handleSocketClose);
+            ws.removeEventListener('error', handleSocketError);
             ws.close();
-        };
+        }
+
+        ws = new WebSocket(`wss://${BACKEND_URL}/ws`);
+
+        ws.addEventListener('open', handleSocketOpen);
+        ws.addEventListener('message', handleSocketMessage);
+        ws.addEventListener('close', handleSocketClose);
+        ws.addEventListener('error', handleSocketError);
     }
 
-    function reconnectWebSocket() {
-        setTimeout(() => {
+    function handleSocketOpen() {
+        console.log('Connected to WebSocket');
+        wsConnected = true;
+        reconnectAttempts = 0;
+        while (messageQueue.length > 0) {
+            ws.send(messageQueue.shift());
+        }
+    }
+
+    function handleSocketMessage(event) {
+        const data = JSON.parse(event.data);
+        console.log('Message from server', data);
+    }
+
+    function handleSocketClose() {
+        console.error('WebSocket closed, attempting to reconnect...');
+        wsConnected = false;
+        attemptReconnect();
+    }
+
+    function handleSocketError(event) {
+        console.error('WebSocket error, attempting to reconnect...', event);
+        wsConnected = false;
+        attemptReconnect();
+    }
+
+    function attemptReconnect() {
+        if (reconnectAttempts < maxReconnectAttempts) {
+            reconnectAttempts++;
+            clearTimeout(reconnectTimeout);
+            reconnectTimeout = setTimeout(connectWebSocket, reconnectDelay * Math.pow(2, reconnectAttempts - 1));
+        } else {
+            console.error('Max reconnect attempts reached. Please check the server.');
+        }
+    }
+
+    function sendMessageToServer(type, data) {
+        const message = JSON.stringify({ type, data });
+        if (wsConnected && ws.readyState === WebSocket.OPEN) {
+            ws.send(message);
+        } else {
+            console.warn('WebSocket is not open. Ready state:', ws.readyState, 'Queuing message');
+            messageQueue.push(message);
             if (!wsConnected) {
-                initializeWebSocket();
+                connectWebSocket();
             }
-        }, 5000); // Attempt to reconnect every 5 seconds
+        }
     }
 
-    initializeWebSocket();
+    function processCave(xhr) {
+        try {
+            const responseData = JSON.parse(xhr.responseText);
+            sendMessageToServer("cave", responseData);
+        } catch (err) {
+            console.error('Failed to process cave response:', err);
+        }
+    }
+
+    function processClaim(xhr) {
+        try {
+            const responseData = JSON.parse(xhr.responseText);
+            sendMessageToServer("claim", responseData);
+        } catch (err) {
+            console.error('Failed to process claim response:', err);
+        }
+    }
+
+    function processMove(xhr) {
+        try {
+            const responseData = JSON.parse(xhr.responseText);
+            sendMessageToServer("move", responseData);
+        } catch (err) {
+            console.error('Failed to process move response:', err);
+        }
+    }
+
+    connectWebSocket();
 
     XHR.open = function(method, url) {
         this._url = url;
@@ -55,10 +119,14 @@
 
             if (myUrl) {
                 switch (true) {
-                    case myUrl.includes("https://cave-api.wolf.game/claim"):
                     case myUrl.includes("https://cave-api.wolf.game/character/tokens"):
                     case myUrl.includes("https://cave-api.wolf.game/character/token/"):
-                        processResponse(this, postData);
+                        break;
+                    case myUrl.includes("https://cave-api.wolf.game/game/caves"):
+                        processCave(this);
+                        break;
+                    case myUrl.includes("https://cave-api.wolf.game/claim"):
+                        processClaim(this);
                         break;
                     case myUrl.includes("https://cave-api.wolf.game/game/move"):
                         processMove(this);
@@ -69,48 +137,4 @@
 
         return send.apply(this, arguments);
     };
-
-    function processResponse(xhr, postData) {
-        // TODO: Add logic later if needed
-    }
-
-    function processMove(xhr) {
-        try {
-            const responseData = JSON.parse(xhr.responseText);
-
-            const { caveId, id, history, position, energy, visible, totalSteps } = responseData;
-            const coordinates = {
-                x: position % 400,
-                y: Math.floor(position / 400)
-            };
-            const diggablePositions = visible.filter(pos => pos.diggable);
-            const diggable = diggablePositions.some(diggablePos => diggablePos.position === position);
-            const formattedData = {
-                collectionName: caveId,
-                caveId,
-                sheepId: id,
-                history,
-                position,
-                coordinates,
-                energy,
-                visible,
-                totalSteps,
-                diggable
-            };
-
-            const message = JSON.stringify(formattedData);
-
-            if (wsConnected && ws.readyState === WebSocket.OPEN) {
-                ws.send(message);
-            } else {
-                console.warn('WebSocket is not open. Ready state:', ws.readyState, 'Queuing message');
-                messageQueue.push(message);
-                if (!wsConnected) {
-                    initializeWebSocket();
-                }
-            }
-        } catch (err) {
-            console.error('Failed to process move response:', err);
-        }
-    }
 })(XMLHttpRequest);
